@@ -1,0 +1,800 @@
+* Table of Contents :toc:
+- [[#bluebeam-mcp--rovo-oauth-integration--stepbystep-workbook][Bluebeam MCP + Rovo OAuth Integration – Step‑by‑Step Workbook]]
+  - [[#goal][Goal]]
+  - [[#overview-of-the-whole-pipeline][Overview of the whole pipeline]]
+- [[#phase1--postgresql-setup][Phase 1 – PostgreSQL Setup]]
+  - [[#-description][📖 Description]]
+  - [[#️-gotchas][⚠️ Gotchas]]
+  - [[#-implementation][✅ Implementation]]
+    - [[#install-postgresql][Install PostgreSQL]]
+    - [[#create-database-and-user][Create database and user]]
+    - [[#verify-tcp-connectivity][Verify TCP connectivity]]
+    - [[#ensure-postgresql-is-listening-only-on-localhost][Ensure PostgreSQL is listening only on localhost]]
+  - [[#-verification][🔎 Verification]]
+- [[#phase2--java--keycloak-install][Phase 2 – Java + Keycloak Install]]
+  - [[#-description-1][📖 Description]]
+  - [[#️-gotchas-1][⚠️ Gotchas]]
+  - [[#-implementation-1][✅ Implementation]]
+    - [[#install-openjdk21-headless][Install OpenJDK 21 headless]]
+    - [[#create-dedicated-unprivileged-system-user][Create dedicated unprivileged system user]]
+    - [[#download-the-latest-stable-keycloak-tarball][Download the latest stable Keycloak tarball]]
+    - [[#unpack-to-optkeycloak][Unpack to /opt/keycloak]]
+    - [[#set-ownership-to-the-keycloak-user][Set ownership to the keycloak user]]
+    - [[#verify-the-distribution-is-present][Verify the distribution is present]]
+  - [[#-verification-1][🔎 Verification]]
+- [[#phase3--configuration-secrets--systemd-service][Phase 3 – Configuration, Secrets & systemd Service]]
+  - [[#-description-2][📖 Description]]
+  - [[#️-gotchas-2][⚠️ Gotchas]]
+  - [[#-implementation-2][✅ Implementation]]
+    - [[#write-the-main-nonsecret-config-optkeycloakconfkeycloakconf][Write the main non‑secret config (`/opt/keycloak/conf/keycloak.conf`)]]
+    - [[#create-the-secrets-environment-file-etckeycloakkeycloakenv][Create the secrets environment file (`/etc/keycloak/keycloak.env`)]]
+    - [[#lock-down-permissions][Lock down permissions]]
+    - [[#run-the-buildoptimize-step-creates-an-optimized-quarkus-image][Run the build/optimize step (creates an optimized Quarkus image)]]
+    - [[#create-systemd-unit-etcsystemdsystemkeycloakservice][Create systemd unit (`/etc/systemd/system/keycloak.service`)]]
+    - [[#reload-systemd-and-enable-the-service][Reload systemd and enable the service]]
+    - [[#watch-the-logs-for-a-clean-start][Watch the logs for a clean start]]
+  - [[#-verification-2][🔎 Verification]]
+- [[#phase4--cloudflare-tunnel-ingress][Phase 4 – Cloudflare Tunnel (Ingress)]]
+  - [[#-description-3][📖 Description]]
+  - [[#️-gotchas-3][⚠️ Gotchas]]
+  - [[#-implementation-3][✅ Implementation]]
+    - [[#install-cloudflared-official-debian-repo][Install cloudflared (official Debian repo)]]
+    - [[#authenticate-cloudflared-with-your-cloudflare-account][Authenticate cloudflared with your Cloudflare account]]
+    - [[#create-a-tunnel-named-keycloak][Create a tunnel named “keycloak”]]
+    - [[#route-your-public-dns-to-the-tunnel][Route your public DNS to the tunnel]]
+    - [[#move-the-tunnel-credential-json-to-a-system-location][Move the tunnel credential JSON to a system location]]
+    - [[#write-the-tunnel-config-etccloudflaredconfigyml][Write the tunnel config (`/etc/cloudflared/config.yml`)]]
+    - [[#install-and-start-cloudflared-as-a-systemd-service][Install and start cloudflared as a systemd service]]
+    - [[#verify-tunnel-status][Verify tunnel status]]
+    - [[#endtoend-test][End‑to‑end test]]
+  - [[#-verification-3][🔎 Verification]]
+- [[#phase5--hardening-realm--client-setup][Phase 5 – Hardening, Realm & Client Setup]]
+  - [[#-description-4][📖 Description]]
+  - [[#️-gotchas-4][⚠️ Gotchas]]
+  - [[#-implementation-4][✅ Implementation]]
+    - [[#1️⃣-log-in-with-bootstrap-admin-and-create-a-permanent-admin-user][1️⃣ Log in with bootstrap admin and create a permanent admin user]]
+    - [[#2️⃣-remove-bootstrap-admin-credentials-now-safe][2️⃣ Remove bootstrap admin credentials (now safe)]]
+    - [[#3️⃣-create-the-dedicated-realm][3️⃣ Create the dedicated realm]]
+    - [[#4️⃣-enable-anonymous-dynamic-client-registration-dcr][4️⃣ Enable Anonymous Dynamic Client Registration (DCR)]]
+    - [[#5️⃣-add-an-audience-protocol-mapper][5️⃣ Add an Audience Protocol Mapper]]
+    - [[#6️⃣-enforce-pkces256-for-the-realm][6️⃣ Enforce PKCE S256 for the realm]]
+    - [[#7️⃣-optional-tighten-dcr-trusted-hosts-after-first-successful-registration][7️⃣ (Optional) Tighten DCR Trusted Hosts after first successful registration]]
+    - [[#8️⃣-optional-add-bruteforce-detection][8️⃣ (Optional) Add Brute‑Force Detection]]
+    - [[#9️⃣-optional-configure-smtp-for-passwordreset--email-verification][9️⃣ (Optional) Configure SMTP (for password‑reset / email verification)]]
+  - [[#-verification-4][🔎 Verification]]
+- [[#phase6--mcp-resource-server-nodejs-integration][Phase 6 – MCP Resource Server (Node.js) Integration]]
+  - [[#-description-5][📖 Description]]
+  - [[#️-gotchas-5][⚠️ Gotchas]]
+  - [[#-implementation-nodejs][✅ Implementation (Node.js)**]]
+    - [[#1️⃣-install-the-jose-library-offline-jwt-validation][1️⃣ Install the `jose` library (offline JWT validation)]]
+    - [[#2️⃣-add-the-protectedresource-metadata-endpoint][2️⃣ Add the protected‑resource metadata endpoint]]
+    - [[#3️⃣-add-a-middleware-that-issues-the-401-challenge-when-no-token-is-supplied][3️⃣ Add a middleware that issues the 401 challenge when no token is supplied]]
+    - [[#4️⃣-offline-jwt-verification-using-jose][4️⃣ Offline JWT verification using `jose`]]
+    - [[#5️⃣-wire-the-middleware-into-your-protected-routes][5️⃣ Wire the middleware into your protected routes]]
+    - [[#6️⃣-start-the-server-adjust-port-as-needed][6️⃣ Start the server (adjust port as needed)]]
+  - [[#-verification-5][🔎 Verification]]
+- [[#phase7--backups--disaster-recovery][Phase 7 – Backups & Disaster Recovery]]
+  - [[#-description-6][📖 Description]]
+  - [[#️-gotchas-6][⚠️ Gotchas]]
+  - [[#-implementation-5][✅ Implementation]]
+    - [[#1️⃣-create-a-backup-directory-owned-by-the-keycloak-user][1️⃣ Create a backup directory (owned by the keycloak user)]]
+    - [[#2️⃣-write-the-backup-script-optkeycloakbinbackupsh][2️⃣ Write the backup script (`/opt/keycloak/bin/backup.sh`)]]
+    - [[#3️⃣-test-the-script-manually][3️⃣ Test the script manually]]
+    - [[#4️⃣-create-a-systemd-service-unit-keycloak-backupservice][4️⃣ Create a systemd service unit (`keycloak-backup.service`)]]
+    - [[#5️⃣-create-a-systemd-timer-keycloak-backuptimer--runs-daily-at-0330][5️⃣ Create a systemd timer (`keycloak-backup.timer`) – runs daily at 03:30]]
+    - [[#6️⃣-enable-the-timer][6️⃣ Enable the timer]]
+    - [[#7️⃣-configure-the-external-drive-mount][7️⃣ Configure the external drive mount]]
+    - [[#8️⃣-optional-generate-an-age-keypair-for-encryption][8️⃣ (Optional) Generate an `age` keypair for encryption]]
+    - [[#9️⃣-document--test-restore-procedure][9️⃣ Document & Test restore procedure]]
+  - [[#-verification-6][🔎 Verification]]
+- [[#phase8--upgrade-procedure-when-a-new-keycloak-version-appears][Phase 8 – Upgrade Procedure (when a new Keycloak version appears)]]
+  - [[#-description-7][📖 Description]]
+  - [[#️-gotchas-7][⚠️ Gotchas]]
+  - [[#-implementation-6][✅ Implementation]]
+    - [[#1️⃣-back-up-right-now][1️⃣ Back up right now]]
+    - [[#2️⃣-download-the-new-version-sidebyside][2️⃣ Download the new version *side‑by‑side*]]
+    - [[#3️⃣-copy-your-config-into-the-new-tree][3️⃣ Copy your config into the new tree]]
+    - [[#4️⃣-if-you-arent-already-using-a-symlink-convert-the-current-install-to-a-symlink][4️⃣ (If you aren’t already using a symlink) Convert the current install to a symlink]]
+    - [[#5️⃣-rebuild-the-new-version][5️⃣ Re‑build the new version]]
+    - [[#6️⃣-start-the-service--it-will-run-db-migrations-automatically][6️⃣ Start the service – it will run DB migrations automatically]]
+    - [[#7️⃣-rollback-plan-if-something-goes-wrong][7️⃣ Rollback plan (if something goes wrong)]]
+  - [[#-verification-7][🔎 Verification]]
+- [[#phase9--optional-cloudflare-access-in-front-of-the-admin-console][Phase 9 – (Optional) Cloudflare Access in front of the Admin Console]]
+  - [[#-description-8][📖 Description]]
+  - [[#️-gotchas-8][⚠️ Gotchas]]
+  - [[#-implementation-7][✅ Implementation]]
+  - [[#-verification-8][🔎 Verification]]
+    -   [[#][]]
+
+* Bluebeam MCP + Rovo OAuth Integration – Step‑by‑Step Workbook
+** Goal
+Create a standards‑compliant OAuth 2.1 Authorization Server (Keycloak) that fronts the existing Bluebeam MCP server, allowing Atlassian Rovo to authenticate users and call the MCP tools.
+
+** Overview of the whole pipeline
+| Component                   | Where it runs                     | What it does                             |
+|-----------------------------+-----------------------------------+------------------------------------------|
+| PostgreSQL                  | Raspberry Pi 5 (localhost)         | Durable storage for Keycloak data        |
+| Keycloak (AS)               | /opt/keycloak (systemd)           | Issues tokens, handles DCR, user login   |
+| Cloudflare Tunnel (ingress) | cloudflared (systemd) on Pi       | Exposes Keycloak at https://oauth‑serv…  |
+| Bluebeam MCP (RS)           | Existing Node.js service (bb‑mcp) | Validates tokens, serves protected tools |
+| Backups (pg_dump + age)     | External USB drive                | Disaster‑recovery for DB & config        |
+
+All steps are divided into **phases**.  Each phase has:
+- **📖 Description** – why we do it.
+- **⚠️ Gotchas** – common pitfalls (taken from the original design notes).
+- **✅ Implementation** – the exact commands / code blocks you must add.
+- **🔎 Verification** – how to know the step succeeded.
+
+---  
+
+**@@toc:@@**   ;(Keeps a live table of contents)
+
+* Phase 1 – PostgreSQL Setup
+** 📖 Description
+Keycloak’s production data must live in a real RDBMS.  PostgreSQL is installed from the Raspberry Pi OS repository and kept bound to *localhost only* (no external exposure).
+
+** ⚠️ Gotchas
+- On PostgreSQL 15+ the default permissions lock the *public* schema. You must `GRANT ALL ON SCHEMA public TO keycloak;`.
+- The default `pg_hba.conf` may only allow “peer” authentication.  DCR / Keycloak connects over TCP, so you need a `host … scram‑sha‑256` line.
+
+** ✅ Implementation
+*** Install PostgreSQL
+    #+begin_src bash
+    sudo apt update
+    sudo apt install -y postgresql
+    sudo systemctl status postgresql
+    #+end_src
+
+*** Create database and user
+    #+begin_src bash
+    # Switch to the internal postgres super‑user
+    sudo -u postgres psql <<'SQL'
+    CREATE DATABASE keycloak;
+    CREATE USER keycloak WITH ENCRYPTED PASSWORD 'CHANGE‑ME‑STRONG‑DB‑PW';
+    GRANT ALL PRIVILEGES ON DATABASE keycloak TO keycloak;
+    \c keycloak
+    GRANT ALL ON SCHEMA public TO keycloak;
+    \q
+    SQL
+    #+end_src
+
+*** Verify TCP connectivity
+    #+begin_src bash
+    psql -h 127.0.0.1 -U keycloak -d keycloak -W
+    # (enter the password you set above – you should see a “keycloak=>” prompt)
+    \q
+    #+end_src
+
+*** Ensure PostgreSQL is listening only on localhost
+    #+begin_src bash
+    grep "^listen_addresses" /etc/postgresql/*/main/postgresql.conf
+    # Expected output: listen_addresses = 'localhost'
+    #+end_src
+
+** 🔎 Verification
+- [ ] `psql` command succeeds and you reach the `keycloak=>` prompt.  
+- [ ] `listen_addresses` is set to `localhost`.  
+
+* Phase 2 – Java + Keycloak Install
+** 📖 Description
+Keycloak is a pure Java application.  We install the head‑less OpenJDK 21 runtime, create an unprivileged system user, download the official distribution, and place it under `/opt/keycloak`.
+
+** ⚠️ Gotchas
+- **Never run Keycloak as root.**  The service user `keycloak` must own the entire directory.
+- The Pi 5 is *aarch64*; download the correct architecture tarball (the generic tar works for both amd64 & aarch64).
+
+** ✅ Implementation
+*** Install OpenJDK 21 headless
+    #+begin_src bash
+    sudo apt install -y openjdk-21-jre-headless
+    java -version   # should report 21.x and “aarch64”
+    #+end_src
+
+*** Create dedicated unprivileged system user
+    #+begin_src bash
+    sudo useradd --system \
+                --shell /usr/sbin/nologin \
+                --home-dir /opt/keycloak \
+                keycloak
+    #+end_src
+
+*** Download the latest stable Keycloak tarball  
+    (Replace *<VERSION>* with the current version, e.g. `26.0.0`.)
+    #+begin_src bash
+    cd /tmp
+    KC_VERSION=26.0.0          # <-- update if newer
+    curl -LO "https://github.com/keycloak/keycloak/releases/download/${KC_VERSION}/keycloak-${KC_VERSION}.tar.gz"
+    #+end_src
+
+*** Unpack to /opt/keycloak
+    #+begin_src bash
+    sudo tar -xzf /tmp/keycloak-${KC_VERSION}.tar.gz -C /opt
+    sudo mv /opt/keycloak-${KC_VERSION} /opt/keycloak
+    #+end_src
+
+*** Set ownership to the keycloak user
+    #+begin_src bash
+    sudo chown -R keycloak:keycloak /opt/keycloak
+    #+end_src
+
+*** Verify the distribution is present
+    #+begin_src bash
+    ls -l /opt/keycloak/bin/kc.sh
+    sudo -u keycloak /opt/keycloak/bin/kc.sh --version
+    #+end_src
+
+** 🔎 Verification
+- [ ] `kc.sh --version` prints the version without error.  
+
+* Phase 3 – Configuration, Secrets & systemd Service
+** 📖 Description
+We separate *non‑secret* configuration (in `keycloak.conf`) from *secrets* (in an environment file).  Then we build an optimized image and run Keycloak under systemd with hardened options.
+
+** ⚠️ Gotchas
+- **Proxy headers:** Because Cloudflare terminates TLS, Keycloak must be told to trust the `X‑Forwarded‑*` headers, otherwise URLs in discovery metadata will be `http://` (broken for Atlassian).
+- **Hostname must match the tunnel DNS name exactly** – mismatches cause “Invalid redirect_uri” errors.
+- **File permissions** on the secrets file must be `640` owned by `root:keycloak`.  Anything looser leaks the DB password.
+
+** ✅ Implementation
+*** Write the main non‑secret config (`/opt/keycloak/conf/keycloak.conf`)
+    #+begin_src conf
+    # ── Database configuration ───────────────────────
+    db=postgres
+    db-url=jdbc:postgresql://localhost:5432/keycloak
+    db-username=keycloak
+
+    # ── HTTP (local) configuration ───────────────────
+    http-enabled=true
+    http-host=127.0.0.1
+    http-port=8080
+
+    # ── Proxy / hostname configuration ───────────────
+    hostname=https://oauth-serv.wegwil.com
+    proxy-headers=xforwarded
+    #+end_src
+
+*** Create the secrets environment file (`/etc/keycloak/keycloak.env`)
+    #+begin_src bash
+    sudo mkdir -p /etc/keycloak
+    sudo tee /etc/keycloak/keycloak.env >/dev/null <<'ENV'
+    KC_DB_PASSWORD=CHANGE‑ME‑STRONG‑DB‑PW
+    KC_BOOTSTRAP_ADMIN_USERNAME=admin
+    KC_BOOTSTRAP_ADMIN_PASSWORD=CHANGE‑ME‑STRONG‑ADMIN‑PW
+    ENV
+    #+end_src
+
+*** Lock down permissions
+    #+begin_src bash
+    sudo chown root:keycloak /etc/keycloak/keycloak.env
+    sudo chmod 640 /etc/keycloak/keycloak.env
+    #+end_src
+
+*** Run the build/optimize step (creates an optimized Quarkus image)
+    #+begin_src bash
+    sudo -u keycloak /opt/keycloak/bin/kc.sh build
+    #+end_src
+
+*** Create systemd unit (`/etc/systemd/system/keycloak.service`)
+    #+begin_src ini
+    [Unit]
+    Description=Keycloak Identity Provider
+    After=network-online.target postgresql.service
+    Wants=network-online.target
+    Requires=postgresql.service
+
+    [Service]
+    User=keycloak
+    Group=keycloak
+    EnvironmentFile=/etc/keycloak/keycloak.env
+    ExecStart=/opt/keycloak/bin/kc.sh start --optimized
+    Restart=on-failure
+    RestartSec=5
+    LimitNOFILE=65536
+
+    # Hardening
+    NoNewPrivileges=true
+    ProtectSystem=strict
+    ProtectHome=true
+    PrivateTmp=true
+    ReadWritePaths=/opt/keycloak/data
+
+    [Install]
+    WantedBy=multi-user.target
+    #+end_src
+
+*** Reload systemd and enable the service
+    #+begin_src bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now keycloak
+    #+end_src
+
+*** Watch the logs for a clean start
+    #+begin_src bash
+    sudo journalctl -u keycloak -f
+    # Expect lines like:
+    #   Listening on http://127.0.0.1:8080
+    #   Keycloak ... started
+    #+end_src
+
+** 🔎 Verification
+- [ ] `systemctl status keycloak` shows *active (running)*.  
+- [ ] Logs contain “Listening on: http://127.0.0.1:8080”.  
+
+* Phase 4 – Cloudflare Tunnel (Ingress)
+** 📖 Description
+Instead of opening port 8080 on your home router, we let the Pi *initiate* an outbound TLS tunnel to Cloudflare. Cloudflare then forwards public traffic to the local Keycloak socket.
+
+** ⚠️ Gotchas
+- **Ingress order matters** – the final `http_status:404` catch‑all is mandatory or the tunnel will refuse to start.
+- **Credentials location** – the service runs as root, so the tunnel’s JSON credentials must live under `/etc/cloudflared/`, not in your user’s home directory.
+
+** ✅ Implementation
+*** Install cloudflared (official Debian repo)
+    #+begin_src bash
+    sudo mkdir -p /usr/share/keyrings
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+      | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] \
+          https://pkg.cloudflare.com/cloudflared any main" \
+      | sudo tee /etc/apt/sources.list.d/cloudflared.list
+    sudo apt update && sudo apt install -y cloudflared
+    #+end_src
+
+*** Authenticate cloudflared with your Cloudflare account
+    #+begin_src bash
+    cloudflared tunnel login
+    # (A browser window opens – log in, approve, then a cert is stored at ~/.cloudflared/cert.pem)
+    #+end_src
+
+*** Create a tunnel named “keycloak”
+    #+begin_src bash
+    cloudflared tunnel create keycloak
+    # Output gives a UUID, e.g. 4a2b‑c3d4‑…  – RECORD THIS.
+    #+end_src
+
+*** Route your public DNS to the tunnel
+    #+begin_src bash
+    cloudflared tunnel route dns keycloak oauth-serv.wegwil.com
+    #+end_src
+
+*** Move the tunnel credential JSON to a system location
+    #+begin_src bash
+    sudo mkdir -p /etc/cloudflared
+    # Replace <UUID> with the one printed above
+    sudo cp ~/.cloudflared/<UUID>.json /etc/cloudflared/
+    #+end_src
+
+*** Write the tunnel config (`/etc/cloudflared/config.yml`)
+    #+begin_src yaml
+    tunnel: <UUID>                     # <-- paste the UUID from above
+    credentials-file: /etc/cloudflared/<UUID>.json
+
+    ingress:
+      - hostname: oauth-serv.wegwil.com
+        service: http://127.0.0.1:8080   # Keycloak runs here locally
+      - service: http_status:404          # catch‑all
+    #+end_src
+
+*** Install and start cloudflared as a systemd service
+    #+begin_src bash
+    sudo cloudflared service install
+    sudo systemctl enable --now cloudflared
+    #+end_src
+
+*** Verify tunnel status
+    #+begin_src bash
+    sudo systemctl status cloudflared
+    cloudflared tunnel info keycloak
+    #+end_src
+
+*** End‑to‑end test
+    #+begin_src bash
+    curl -I https://oauth-serv.wegwil.com
+    # You should get a 302 → redirect to the Keycloak login page.
+    #+end_src
+
+** 🔎 Verification
+- [ ] `curl -I` returns a 302 with a `Location: https://oauth-serv.wegwil.com/...` header.  
+- [ ] Cloudflare dashboard shows the tunnel **Online** and the DNS entry is proxied (orange cloud).
+
+* Phase 5 – Hardening, Realm & Client Setup
+** 📖 Description
+Now that the server is reachable, we lock it down and create the *real* Admin user, a dedicated realm (`bluebeam-mcp`), and the first client.  We also enable Anonymous Dynamic Client Registration (DCR) and configure the Audience mapper and PKCE enforcement required by Atlassian Rovo.
+
+** ⚠️ Gotchas
+- **Bootstrap admin removal:** Do *not* delete the bootstrap admin credentials before you have verified you can log in with the new admin account, otherwise you lock yourself out.
+- **Audience mapper:** The MCP server validates `aud` → you must add a mapper that injects `aud = https://bb-mcp.wegwil.com` into every token.
+- **PKCE enforcement:** Atlassian requires the `S256` code‑challenge method.  Enforce it on the realm or on the client after registration.
+
+** ✅ Implementation
+*** 1️⃣ Log in with bootstrap admin and create a permanent admin user
+    1. Open a browser → `https://oauth-serv.wegwil.com/admin`.
+    2. Log in with the bootstrap credentials you set in `keycloak.env` (`admin / …`).
+    3. In the *Master* realm → *Users* → *Add user* → fill in **username**, **email**.
+    4. Open the new user → *Credentials* → set a **strong password**, turn **Temporary** off.
+    5. *Role mapping* → assign the **admin** role.
+    6. Logout, then login again with the new admin account – confirm full access.
+
+*** 2️⃣ Remove bootstrap admin credentials (now safe)
+    #+begin_src bash
+    sudo sed -i '/^KC_BOOTSTRAP_ADMIN_/d' /etc/keycloak/keycloak.env
+    sudo systemctl restart keycloak
+    #+end_src
+
+*** 3️⃣ Create the dedicated realm
+    1. In the top‑left realm selector → **Create Realm**.
+    2. Name it **bluebeam-mcp** (or any name you prefer, but keep it consistent).
+    3. Click **Create**.
+
+*** 4️⃣ Enable Anonymous Dynamic Client Registration (DCR)
+    1. Inside the *bluebeam-mcp* realm → *Realm Settings* → *Client Registration*.
+    2. Turn **Allow Dynamic Client Registration** **ON**.
+    3. Keep the default **Policy** (Full Scope Disabled, Allowed Client Scopes, etc.) – you can tighten later.
+
+*** 5️⃣ Add an Audience Protocol Mapper
+    1. Still in the *bluebeam-mcp* realm → *Clients* → *client‑scopes* → **Create** → name it `audience-mcp`.
+    2. Choose **Protocol Mapper** → **OIDC audience**.
+    3. Set **Included Audience** to `https://bb-mcp.wegwil.com`.
+    4. Save.
+    5. Back in *Client Scopes* tab → click **Default Client Scopes** → add `audience-mcp` to the default list.
+
+*** 6️⃣ Enforce PKCE S256 for the realm
+    1. *Realm Settings* → *Login* → **Require PKCE** → set to **S256**.
+    2. Save.
+
+*** 7️⃣ (Optional) Tighten DCR Trusted Hosts after first successful registration
+    *Only do this after you see Atlassian successfully register a client; otherwise you’ll get silent 400 errors.*
+
+*** 8️⃣ (Optional) Add Brute‑Force Detection
+    1. *Realm Settings* → *Security Defenses* → **Brute Force Detection** → **ON**.
+    2. Configure e.g. **Max failures** = 5, **Permanent lockout** = false.
+
+*** 9️⃣ (Optional) Configure SMTP (for password‑reset / email verification)
+    1. *Realm Settings* → *Email* → fill in host, port, from‑address, credentials.
+    2. Click **Test connection**.
+
+** 🔎 Verification
+- [ ] Log out of the admin console, log back in with the *new* admin user – works.
+- [ ] `https://oauth-serv.wegwil.com/realms/bluebeam-mcp/.well-known/openid-configuration` returns a large JSON document.
+- [ ] In that JSON you can see `"registration_endpoint": "https://oauth-serv.wegwil.com/realms/bluebeam-mcp/clients-registrations/openid-connect"`.
+- [ ] Decode a freshly‑issued token (e.g. using jwt.io) and confirm it contains `"aud": "https://bb-mcp.wegwil.com"`.
+
+* Phase 6 – MCP Resource Server (Node.js) Integration
+** 📖 Description
+Your existing Bluebeam MCP server becomes the OAuth Resource Server.  It must:
+1. Advertise its protected‑resource metadata (`/.well-known/oauth-protected-resource`).
+2. Return a `401` challenge containing a `resource_metadata` pointer.
+3. Validate incoming JWTs *offline* (using the JWKS from Keycloak) and check `iss`, `aud`, `exp`, `nbf`.
+
+** ⚠️ Gotchas
+- **Never use token introspection** (HTTP call to Keycloak on every request) – it adds latency and a single point of failure.
+- **RFC 9728 Header** must be exact: `WWW-Authenticate: Bearer resource_metadata="https://bb-mcp.wegwil.com/.well-known/oauth-protected-resource"`.
+
+** ✅ Implementation (Node.js)**
+> *Adjust the code snippets to match your existing server framework (Express, Fastify, etc.).*
+
+*** 1️⃣ Install the `jose` library (offline JWT validation)
+    #+begin_src bash
+    npm install jose   # or yarn add jose
+    #+end_src
+
+*** 2️⃣ Add the protected‑resource metadata endpoint
+    #+begin_src javascript
+    // Assuming an Express app
+    const express = require('express');
+    const app = express();
+
+    app.get('/.well-known/oauth-protected-resource', (req, res) => {
+      res.json({
+        resource: 'https://bb-mcp.wegwil.com',
+        authorization_servers: ['https://oauth-serv.wegwil.com/realms/bluebeam-mcp']
+      });
+    });
+    #+end_src
+
+*** 3️⃣ Add a middleware that issues the 401 challenge when no token is supplied
+    #+begin_src javascript
+    const metadataUrl = 'https://bb-mcp.wegwil.com/.well-known/oauth-protected-resource';
+
+    function authChallenge(req, res, next) {
+      const auth = req.headers.authorization;
+      if (!auth || !auth.startsWith('Bearer ')) {
+        res.set('WWW-Authenticate',
+                `Bearer resource_metadata="${metadataUrl}"`);
+        return res.status(401).send('Authentication Required');
+      }
+      next();
+    }
+    #+end_src
+
+*** 4️⃣ Offline JWT verification using `jose`
+    #+begin_src javascript
+    const { createRemoteJWKSet, jwtVerify } = require('jose');
+    const jwks = createRemoteJWKSet(
+      new URL('https://oauth-serv.wegwil.com/realms/bluebeam-mcp/protocol/openid-connect/certs')
+    );
+
+    async function verifyToken(req, res, next) {
+      const auth = req.headers.authorization;
+      const token = auth && auth.split(' ')[1];
+      try {
+        const { payload } = await jwtVerify(token, jwks, {
+          issuer: 'https://oauth-serv.wegwil.com/realms/bluebeam-mcp',
+          audience: 'https://bb-mcp.wegwil.com',
+        });
+        // Token is good – you can attach user info to req if you like
+        req.user = payload;
+        next();
+      } catch (err) {
+        console.error('JWT verification failed:', err);
+        return res.status(401).send('Invalid token');
+      }
+    }
+    #+end_src
+
+*** 5️⃣ Wire the middleware into your protected routes
+    #+begin_src javascript
+    // Example protected endpoint
+    app.get('/protected/tool',
+      authChallenge,
+      verifyToken,
+      (req, res) => {
+        res.json({ message: `Hello ${req.user.preferred_username}` });
+      });
+    #+end_src
+
+*** 6️⃣ Start the server (adjust port as needed)
+    #+begin_src javascript
+    const PORT = 3000;
+    app.listen(PORT, () => console.log(`MCP server listening on ${PORT}`));
+    #+end_src
+
+** 🔎 Verification
+- [ ] Request `GET https://bb-mcp.wegwil.com/protected/tool` **without** an `Authorization` header → you receive `401` with the correct `WWW-Authenticate` header.
+- [ ] Obtain a token from Keycloak (e.g. via the OAuth flow or the DCR client‑credentials grant) and call the same endpoint with `Authorization: Bearer <token>` → you get a `200` and a JSON payload containing your username.
+
+* Phase 7 – Backups & Disaster Recovery
+** 📖 Description
+A single SD card failure would erase everything.  We automate nightly `pg_dump` backups, copy (and encrypt) them to an external USB drive, and keep a systemd timer to run the job.
+
+** ⚠️ Gotchas
+- **Mount‑check** – If the external drive is unplugged, the script must *not* write to the mount‑point directory on the SD card (which would quickly fill the root FS).  Use `mountpoint -q /mnt/backup` before copying.
+- **Encryption** – Dumps contain clear‑text passwords and client secrets. Encrypt with `age` before storing off‑board.
+- **UUID in /etc/fstab** – Guarantees the drive mounts at the same path across reboots; `nofail` prevents boot‑failure if the drive is missing.
+
+** ✅ Implementation
+*** 1️⃣ Create a backup directory (owned by the keycloak user)
+    #+begin_src bash
+    sudo mkdir -p /var/backups/keycloak
+    sudo chown keycloak:keycloak /var/backups/keycloak
+    sudo chmod 750 /var/backups/keycloak
+    #+end_src
+
+*** 2️⃣ Write the backup script (`/opt/keycloak/bin/backup.sh`)
+    #+begin_src bash
+    sudo tee /opt/keycloak/bin/backup.sh >/dev/null <<'SCRIPT'
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    BACKUP_DIR=/var/backups/keycloak
+    STAMP=$(date +%Y%m%d-%H%M%S)
+    KEEP_DAYS=14
+
+    # -------------------------------------------------
+    # 1️⃣ Dump the PostgreSQL database (authoritative source)
+    # -------------------------------------------------
+    PGPASSWORD="${KC_DB_PASSWORD}" pg_dump \
+      -h localhost -U keycloak -d keycloak -Fc \
+      -f "${BACKUP_DIR}/keycloak-db-${STAMP}.dump"
+
+    # -------------------------------------------------
+    # 2️⃣ Prune old local backups
+    # -------------------------------------------------
+    find "${BACKUP_DIR}" -name 'keycloak-db-*.dump' -mtime +${KEEP_DAYS} -delete
+
+    # -------------------------------------------------
+    # 3️⃣ Copy to external drive (if it is mounted)
+    # -------------------------------------------------
+    EXT_DIR=/mnt/backup/keycloak
+    if mountpoint -q /mnt/backup; then
+      # Encrypt with age before copying (requires age keypair)
+      if [[ -f "${HOME}/.age/keycloak.pub" ]]; then
+        age -r "$(cat ${HOME}/.age/keycloak.pub)" \
+            -o "${EXT_DIR}/keycloak-db-${STAMP}.dump.age" \
+            "${BACKUP_DIR}/keycloak-db-${STAMP}.dump"
+        # prune encrypted copies on the drive (keep longer)
+        find "${EXT_DIR}" -name 'keycloak-db-*.dump.age' -mtime +60 -delete
+        echo "Encrypted backup stored at ${EXT_DIR}/keycloak-db-${STAMP}.dump.age"
+      else
+        cp "${BACKUP_DIR}/keycloak-db-${STAMP}.dump" "${EXT_DIR}/"
+        echo "Plain backup copied to ${EXT_DIR}"
+      fi
+    else
+      echo "⚠️ /mnt/backup not mounted – external copy SKIPPED" >&2
+    fi
+
+    echo "✅ Backup completed: ${STAMP}"
+    SCRIPT
+    sudo chmod 750 /opt/keycloak/bin/backup.sh
+    sudo chown keycloak:keycloak /opt/keycloak/bin/backup.sh
+    #+end_src
+
+*** 3️⃣ Test the script manually
+    #+begin_src bash
+    sudo -u keycloak bash -c 'set -a; . /etc/keycloak/keycloak.env; set +a; /opt/keycloak/bin/backup.sh'
+    ls -lh /var/backups/keycloak/
+    # If the external drive is mounted, also check:
+    ls -lh /mnt/backup/keycloak/
+    #+end_src
+
+*** 4️⃣ Create a systemd service unit (`keycloak-backup.service`)
+    #+begin_src ini
+    [Unit]
+    Description=Keycloak PostgreSQL backup
+    After=postgresql.service
+    Wants=postgresql.service
+
+    [Service]
+    Type=oneshot
+    User=keycloak
+    Group=keycloak
+    EnvironmentFile=/etc/keycloak/keycloak.env
+    ExecStart=/opt/keycloak/bin/backup.sh
+    #+end_src
+
+*** 5️⃣ Create a systemd timer (`keycloak-backup.timer`) – runs daily at 03:30
+    #+begin_src ini
+    [Unit]
+    Description=Daily Keycloak backup timer
+
+    [Timer]
+    OnCalendar=*-*-* 03:30:00
+    Persistent=true
+
+    [Install]
+    WantedBy=timers.target
+    #+end_src
+
+*** 6️⃣ Enable the timer
+    #+begin_src bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now keycloak-backup.timer
+    sudo systemctl list-timers | grep keycloak-backup
+    #+end_src
+
+*** 7️⃣ Configure the external drive mount
+    1. Identify the UUID of the USB partition:
+        #+begin_src bash
+        sudo blkid | grep -i 'usb\|sd'
+        #+end_src
+    2. Edit `/etc/fstab` (replace `XXXX-XXXX` with the actual UUID):
+        #+begin_src conf
+        UUID=XXXX-XXXX  /mnt/backup  ext4  defaults,nofail,x-systemd.device-timeout=10  0  2
+        #+end_src
+    3. Create the mount point and test the mount:
+        #+begin_src bash
+        sudo mkdir -p /mnt/backup
+        sudo mount -a
+        df -h /mnt/backup
+        #+end_src
+    4. Create the destination directory owned by keycloak:
+        #+begin_src bash
+        sudo mkdir -p /mnt/backup/keycloak
+        sudo chown keycloak:keycloak /mnt/backup/keycloak
+        sudo chmod 750 /mnt/backup/keycloak
+        #+end_src
+
+*** 8️⃣ (Optional) Generate an `age` keypair for encryption
+    #+begin_src bash
+    mkdir -p ~/.age
+    age-keygen -o ~/.age/keycloak.key   # private key – keep offline!
+    cat ~/.age/keycloak.key.pub > ~/.age/keycloak.pub   # public key used by script
+    #+end_src
+    *Store the private key somewhere safe (e.g., a password manager or offline USB).*
+
+*** 9️⃣ Document & Test restore procedure
+    #+begin_src bash
+    # Example restore (run on a fresh DB)
+    sudo -u postgres dropdb keycloak
+    sudo -u postgres createdb keycloak
+    sudo -u keycloak bash -c 'set -a; . /etc/keycloak/keycloak.env; set +a; \
+        pg_restore -h localhost -U keycloak -d keycloak \
+        /var/backups/keycloak/keycloak-db-20240615-030000.dump'
+    # Verify by checking Keycloak UI.
+    #+end_src
+
+** 🔎 Verification
+- [ ] After the manual run, you see a `.dump` (or `.dump.age`) file in `/var/backups/keycloak` **and** in `/mnt/backup/keycloak` if the drive is plugged in.
+- [ ] `systemctl status keycloak-backup.timer` shows `Next` scheduled for tomorrow.
+- [ ] Simulate a failure: stop Keycloak, drop the DB, restore from the most recent dump – the UI should re‑appear with all realms/clients intact.  
+
+* Phase 8 – Upgrade Procedure (when a new Keycloak version appears)
+** 📖 Description
+Upgrading is mostly a *file‑system switch* plus a DB migration that Keycloak does automatically on first start.  The crucial safety net is a *pre‑upgrade backup*.
+
+** ⚠️ Gotchas
+- **Never upgrade in‑place.** Keep the old directory and symlink `/opt/keycloak` → current version.  Swapping the symlink is atomic.
+- **Schema migrations are forward‑only.** If you need to roll back, you must restore the pre‑upgrade DB dump.
+
+** ✅ Implementation
+*** 1️⃣ Back up right now
+    #+begin_src bash
+    sudo -u keycloak bash -c 'set -a; . /etc/keycloak/keycloak.env; set +a; /opt/keycloak/bin/backup.sh'
+    #+end_src
+
+*** 2️⃣ Download the new version *side‑by‑side*
+    #+begin_src bash
+    cd /opt
+    NEW_VER=27.0.0          # <-- replace with the version you want
+    curl -fLO "https://github.com/keycloak/keycloak/releases/download/${NEW_VER}/keycloak-${NEW_VER}.tar.gz"
+    sudo tar -xzf "keycloak-${NEW_VER}.tar.gz"
+    sudo mv "keycloak-${NEW_VER}" "keycloak-${NEW_VER}"
+    sudo chown -R keycloak:keycloak "keycloak-${NEW_VER}"
+    #+end_src
+
+*** 3️⃣ Copy your config into the new tree
+    #+begin_src bash
+    sudo cp /opt/keycloak/conf/keycloak.conf /opt/keycloak-${NEW_VER}/conf/keycloak.conf
+    # If you have custom files (themes, providers) copy them as well.
+    #+end_src
+
+*** 4️⃣ (If you aren’t already using a symlink) Convert the current install to a symlink
+    #+begin_src bash
+    sudo systemctl stop keycloak
+    sudo mv /opt/keycloak /opt/keycloak-OLD
+    sudo ln -sfn /opt/keycloak-${NEW_VER} /opt/keycloak
+    #+end_src
+
+*** 5️⃣ Re‑build the new version
+    #+begin_src bash
+    sudo -u keycloak /opt/keycloak/bin/kc.sh build
+    #+end_src
+
+*** 6️⃣ Start the service – it will run DB migrations automatically
+    #+begin_src bash
+    sudo systemctl start keycloak
+    sudo journalctl -u keycloak -f
+    # Look for lines like “Running Liquibase migration” and then “Keycloak started”.
+    #+end_src
+
+*** 7️⃣ Rollback plan (if something goes wrong)
+    1. Stop Keycloak: `sudo systemctl stop keycloak`
+    2. Restore DB dump from step 1 (`pg_restore --clean …`).
+    3. Point the symlink back to the old directory:
+        #+begin_src bash
+        sudo ln -sfn /opt/keycloak-OLD /opt/keycloak
+        #+end_src
+    4. Start Keycloak again.
+
+** 🔎 Verification
+- [ ] After upgrade, the discovery document still works and DCR still registers a client.  
+- [ ] If the service fails to start, follow the rollback steps and confirm the old version works again.
+
+* Phase 9 – (Optional) Cloudflare Access in front of the Admin Console
+** 📖 Description
+Adds a second, independent authentication layer for the Keycloak admin UI, reducing risk if an admin credential leaks.
+
+** ⚠️ Gotchas
+- This only protects the UI **/admin** and the REST API under that path.  Automation scripts that call the admin API will need a Cloudflare Access token if you enable this.
+
+** ✅ Implementation
+1. In Cloudflare dashboard → **Zero Trust → Access → Applications** → **Add an Application** → *Self‑hosted*.
+2. Application domain: `oauth-serv.wegwil.com`, Path: `/admin*`.
+3. Create a policy that **allows only your corporate email** (or a group of emails).
+4. Save.  Now, visiting `https://oauth-serv.wegwil.com/admin` prompts for a Cloudflare Access login *before* the Keycloak login page.
+
+** 🔎 Verification
+- [ ] You see a Cloudflare Access screen when navigating to `/admin`.  
+
+---  
+
+### How to Use This Workbook
+1. **Open the Org file** in Emacs/Org‑mode (or any plain‑text editor).  
+2. **Press `C-c C-c`** on a checkbox to toggle it (or click with your mouse).  
+3. Follow the steps **in order** – each phase depends on the previous one.  
+4. When a step fails, read the *⚠️ Gotchas* right above it – they explain the most common reasons and how to fix them.  
+5. Take screenshots of the verification steps (especially the discovery JSON) – they are useful proof that the integration works before you hand the system over to Atlassian.
+
+That’s it – you now have a **complete, beginner‑friendly, end‑to‑end checklist** that includes **every script** from the original FSD design, plus explanations and safety warnings.  Tick each box as you go, and you’ll have a production‑ready OAuth integration for Bluebeam MCP in no time!
+
+***   
